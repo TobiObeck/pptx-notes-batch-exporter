@@ -21,12 +21,13 @@ fs.readdir(presentationsPath, { encoding: "utf8" })
 
 function processFiles(files) {
   const fileName = files[0]; //files.forEach((fileName) => {
+
   const tempPath = path.join(presentationsPath, fileName);
-  processUnzippedDirectory(tempPath);
+  processExtractedDirectory(tempPath);
   //});
 }
 
-async function processUnzippedDirectory(tempPath) {
+async function processExtractedDirectory(tempPath) {
   const stat = await fs.lstat(tempPath);
   if (stat.isDirectory() === true) {
     //console.log(fileName);
@@ -53,29 +54,47 @@ async function processUnzippedDirectory(tempPath) {
   }
 }
 
-function parseNoteSlides(pathToNotes, notesSlideXmls) {
-  const i = 1;
-  const notesSlideXmlPath = path.join(pathToNotes, notesSlideXmls[i]); // FIRST SLIDE ONLY
-  console.log(notesSlideXmlPath);
+async function parseNoteSlides(pathToNotes, notesSlideXmlFiles) {
 
-  fs.readFile(notesSlideXmlPath, { encoding: "utf-8" })
-    .then(async (xmlString) => {
+  let fullPresentationText = "";
+
+  // sort files by trailing number
+  notesSlideXmlFiles.sort(function(current, next){
+    const currNumber = parseInt(extractNumberFromFileName(current), 10)
+    const nextNumber = parseInt(extractNumberFromFileName(next), 10)
+
+    if(currNumber < nextNumber) { return -1; }
+    if(currNumber > nextNumber) { return 1; }
+    return 0;
+  })
+
+  // extract text from every xml file
+  for (const notesSlideXmlFile of notesSlideXmlFiles) {
+    const notesSlideXmlPath = path.join(pathToNotes, notesSlideXmlFile);
+    console.log(notesSlideXmlPath);
+    try {
       const stat = await fs.lstat(notesSlideXmlPath);
       if (stat.isFile() === true) {
+        const xmlString = await fs.readFile(notesSlideXmlPath, {
+          encoding: "utf-8",
+        });
+
         const cleanedXmlString = replaceSpecialCharacters(xmlString);
         const notesJsObj = await convertXmlToJsObject(cleanedXmlString);
         const extractedText = extractTextFromJsObj(
           notesJsObj,
-          notesSlideXmls[i]
+          notesSlideXmlFile
         );
-        console.log(extractedText);
+        // console.log(extractedText);
 
-        writeFile(extractedText);
+        fullPresentationText += extractedText + "\n";
       }
-    })
-    .catch((error) => {
-      throw error;
-    });
+    } catch (error) {
+      throw "error while reading some notesSlide{NUMBER}.xml file!!!" + error;
+    } 
+  }
+
+  writeFile(fullPresentationText);
 }
 
 /**
@@ -103,45 +122,48 @@ async function convertXmlToJsObject(xmlString) {
   }
 }
 
-function extractTextFromJsObj(notesJsObj, notesSlideXml) {
+function extractTextFromJsObj(notesJsObj, notesSlideXmlFile) {
   const paragraphs =
     notesJsObj["p:notes"]["p:cSld"][0]["p:spTree"][0]["p:sp"][1]["p:txBody"][0][
       "a:p"
     ];
 
-  console.log(paragraphs);
+  // console.log(paragraphs);
 
-  let slideText = `### ${notesSlideXml}\n\n`;
+  const slideNumber = extractNumberFromFileName(notesSlideXmlFile);
+  let slideText = `### ${slideNumber}\n\n`;
+
+  console.log(slideText)
 
   paragraphs.forEach((para) => {
     if (para.hasOwnProperty("a:r") === true) {
       const rows = para["a:r"];
       const textRow = rows.reduce((acc, row) => acc + row["a:t"][0], "");
-      //console.log("textRow", textRow);
-      slideText += textRow; // + '\n'
+      
+      slideText += textRow;
     }
-    //if (para.hasOwnProperty("a:endParaRPr") === true) {
-      // slideText += '\n'
+    //if (para.hasOwnProperty("a:endParaRPr") === true) {    
     //}
     slideText += "\n";
   });
 
-  slideText += "\n";
+  // slideText += "\n";
 
   return slideText;
+}
 
-  // //a:r[1]/a:t[1]/text()[1]
+function extractNumberFromFileName(notesSlideXmlFile) {
+  return notesSlideXmlFile.replace("notesSlide", "").replace(".xml", "");
 }
 
 function writeFile(extractedText) {
   const outputPath = path.join(__dirname, "output");
   const outputFilePath = path.join(outputPath, "output.txt");
-  outputPath
+  outputPath;
 
-  fs.mkdir(outputPath, { 'recursive': true })
+  fs.mkdir(outputPath, { recursive: true });
 
-  fs.writeFile(outputFilePath, extractedText, 'utf8')    
-    .catch((error) => {
-      throw "error while writing file" + error;
-    });
+  fs.writeFile(outputFilePath, extractedText, "utf8").catch((error) => {
+    throw "error while writing file" + error;
+  });
 }
