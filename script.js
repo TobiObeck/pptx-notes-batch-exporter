@@ -54,7 +54,7 @@ async function processUnzippedDirectory(tempPath) {
 }
 
 function parseNoteSlides(pathToNotes, notesSlideXmls) {
-  const i = 1
+  const i = 1;
   const notesSlideXmlPath = path.join(pathToNotes, notesSlideXmls[i]); // FIRST SLIDE ONLY
   console.log(notesSlideXmlPath);
 
@@ -64,8 +64,13 @@ function parseNoteSlides(pathToNotes, notesSlideXmls) {
       if (stat.isFile() === true) {
         const cleanedXmlString = replaceSpecialCharacters(xmlString);
         const notesJsObj = await convertXmlToJsObject(cleanedXmlString);
-        const extractedText = extractTextFromJsObj(notesJsObj, notesSlideXmls[i]);
+        const extractedText = extractTextFromJsObj(
+          notesJsObj,
+          notesSlideXmls[i]
+        );
         console.log(extractedText);
+
+        writeFile(extractedText);
       }
     })
     .catch((error) => {
@@ -74,14 +79,14 @@ function parseNoteSlides(pathToNotes, notesSlideXmls) {
 }
 
 /**
- * while extracting the pptx files with 7zip special characters 
+ * while extracting the pptx files with 7zip special characters
  * like & are replaced with an encoded version &amp;
  * The xml to js object library replace
  * maybe it would be better to decode the string with
  * urldecode or decodeURIComponent() or sth like this
  */
-function replaceSpecialCharacters(xmlString){
-  return xmlString.replace("&amp;", '\&amp;')
+function replaceSpecialCharacters(xmlString) {
+  return xmlString.replace("&amp;", "&amp;");
   //return xmlString.replace("&amp;", "'&amp;'")
   //return xmlString
 }
@@ -106,25 +111,37 @@ function extractTextFromJsObj(notesJsObj, notesSlideXml) {
 
   console.log(paragraphs);
 
-  let slideText = `### ${notesSlideXml}\n\n`
-  
+  let slideText = `### ${notesSlideXml}\n\n`;
+
   paragraphs.forEach((para) => {
     if (para.hasOwnProperty("a:r") === true) {
       const rows = para["a:r"];
       const textRow = rows.reduce((acc, row) => acc + row["a:t"][0], "");
       //console.log("textRow", textRow);
-      slideText += textRow // + '\n'
+      slideText += textRow; // + '\n'
     }
-    if (para.hasOwnProperty("a:endParaRPr") === true) {
-       // slideText += '\n'
-    }
-    slideText += '\n'
+    //if (para.hasOwnProperty("a:endParaRPr") === true) {
+      // slideText += '\n'
+    //}
+    slideText += "\n";
   });
 
-  slideText += "\n"
+  slideText += "\n";
 
-  return slideText
+  return slideText;
 
   // //a:r[1]/a:t[1]/text()[1]
 }
 
+function writeFile(extractedText) {
+  const outputPath = path.join(__dirname, "output");
+  const outputFilePath = path.join(outputPath, "output.txt");
+  outputPath
+
+  fs.mkdir(outputPath, { 'recursive': true })
+
+  fs.writeFile(outputFilePath, extractedText, 'utf8')    
+    .catch((error) => {
+      throw "error while writing file" + error;
+    });
+}
